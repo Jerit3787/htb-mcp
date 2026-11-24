@@ -436,45 +436,24 @@ export class HtbApi {
     product = "labs",
     protocol: "udp" | "tcp" = "udp",
   ): Promise<VpnConfigResult> {
-    const candidates =
+    const endpoint =
       protocol === "udp"
-        ? [
-            `/access/ovpnfile/${serverId}/0`,
-            `/access/ovpnfile/${serverId}/${product}/udp`,
-            `/access/ovpnfile/${serverId}/udp`,
-          ]
-        : [
-            `/access/ovpnfile/${serverId}/0/1`,
-            `/access/ovpnfile/${serverId}/${product}/tcp`,
-            `/access/ovpnfile/${serverId}/tcp`,
-          ];
+        ? `/access/ovpnfile/${serverId}/0`
+        : `/access/ovpnfile/${serverId}/0/1`;
+    const content = await this.client.get<string>(endpoint, {
+      responseType: "text",
+    });
 
-    let lastError: unknown;
-    for (const endpoint of candidates) {
-      try {
-        const content = await this.client.get<string>(endpoint, {
-          responseType: "text",
-        });
-        if (!isOpenVpnProfile(content)) {
-          lastError = new HtbError({
-            code: "INVALID_RESPONSE",
-            message: "HTB returned a response that does not look like an OpenVPN profile.",
-            endpoint,
-          });
-          continue;
-        }
-        return { serverId, product, protocol, endpoint, content };
-      } catch (error) {
-        lastError = error;
-      }
+    if (!isOpenVpnProfile(content)) {
+      throw new HtbError({
+        code: "INVALID_RESPONSE",
+        message: "HTB returned a response that does not look like an OpenVPN profile.",
+        endpoint,
+        hint: "Call htb_vpn_servers to verify the assigned server, then retry.",
+      });
     }
 
-    throw lastError instanceof HtbError
-      ? lastError
-      : new HtbError({
-          code: "VPN_ERROR",
-          message: "Could not download an OpenVPN profile from HTB.",
-        });
+    return { serverId, product, protocol, endpoint, content };
   }
 
   async getConnectionStatus(): Promise<Record<string, unknown>[]> {

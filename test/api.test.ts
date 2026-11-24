@@ -170,7 +170,8 @@ test("downloads the UDP profile and validates its contents", async () => {
     assert.equal(url.pathname, "/api/v4/access/ovpnfile/289/0");
     return new Response(profile, {
       status: 200,
-      headers: { "content-type": "application/x-openvpn-profile" },
+      // HTB currently serves .ovpn profiles with a text/html content type.
+      headers: { "content-type": "text/html; charset=utf-8" },
     });
   });
 

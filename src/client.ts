@@ -188,9 +188,9 @@ export class HtbClient {
   ): Promise<T> {
     const text = await response.text();
     const contentType = response.headers.get("content-type") ?? "";
-    const looksLikeHtml =
-      contentType.includes("text/html") ||
-      /^\s*<(?:!doctype|html)/i.test(text.slice(0, 256));
+    // HTB serves OpenVPN profiles as `text/html` even though the body is plain
+    // text. Detect actual HTML by content, not the header alone.
+    const looksLikeHtml = isHtmlBody(text);
 
     if (looksLikeHtml) {
       throw new HtbError({
@@ -253,11 +253,7 @@ export class HtbClient {
       }
     }
 
-    const contentType = response.headers.get("content-type") ?? "";
-    if (
-      contentType.includes("text/html") ||
-      /^\s*<(?:!doctype|html)/i.test(text.slice(0, 256))
-    ) {
+    if (isHtmlBody(text)) {
       return new HtbError({
         code: "INVALID_RESPONSE",
         message: `HTB returned an HTML page instead of API JSON (${response.status}).`,
@@ -318,6 +314,10 @@ export class HtbClient {
       details,
     });
   }
+}
+
+function isHtmlBody(text: string): boolean {
+  return /^\s*<(?:!doctype|html|head|body|!--)/i.test(text.slice(0, 512));
 }
 
 function retryAfterMs(response: Response, attempt: number): number {
