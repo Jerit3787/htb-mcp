@@ -215,6 +215,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const spawnResponse = await api.spawnMachine(machine.id);
+      assertActionSucceeded(spawnResponse, "spawn the machine");
       const ready = await api.waitForActiveMachine(machine.id, args.wait_seconds * 1000);
 
       if (ready?.ip && !ready.isSpawning) {
@@ -264,6 +265,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.terminateMachine(active.id);
+      assertActionSucceeded(response, "terminate the machine");
       return {
         action: "terminated",
         machine: activeMachineView(active),
@@ -304,6 +306,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.resetMachine(active.id);
+      assertActionSucceeded(response, "reset the machine");
       return {
         action: "reset_requested",
         machine: activeMachineView(active),
@@ -343,6 +346,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.extendMachine(active.id);
+      assertActionSucceeded(response, "extend the machine");
       return {
         action: "extended",
         machine: activeMachineView(active),
@@ -426,6 +430,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.switchVpnServer(args.server_id);
+      assertActionSucceeded(response, "switch the VPN server");
       return {
         action: "switched",
         terminatedMachine: Boolean(active),
@@ -737,6 +742,26 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       };
     }),
   );
+}
+
+function assertActionSucceeded(
+  response: Record<string, unknown>,
+  action: string,
+): void {
+  if (response.success !== false) {
+    return;
+  }
+
+  const message =
+    typeof response.message === "string" ? response.message : `HTB rejected ${action}.`;
+  const rateLimited = /wait .*minute|too many requests|rate limit/i.test(message);
+  throw new HtbError({
+    code: rateLimited ? "RATE_LIMITED" : "API_ERROR",
+    message: `HTB rejected ${action}: ${message}`,
+    ...(rateLimited
+      ? { hint: "Wait for the advertised cooldown before retrying." }
+      : {}),
+  });
 }
 
 function activeMachineView(machine: ActiveMachine): Record<string, unknown> {
