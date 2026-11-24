@@ -1,0 +1,50 @@
+{
+  "name": "htb-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Hack The Box: machines, VPN, flags, and challenges.",
+  "type": "module",
+  "bin": {
+    "htb-mcp": "dist/src/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/src/index.js",
+    "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "hackthebox",
+    "htb",
+    "mcp",
+    "model-context-protocol",
+    "vpn",
+    "penetration-testing"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jerit3787/htb-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jerit3787/htb-mcp/issues"
+  },
+  "homepage": "https://github.com/Jerit3787/htb-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}
