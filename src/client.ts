@@ -253,6 +253,20 @@ export class HtbClient {
       }
     }
 
+    const contentType = response.headers.get("content-type") ?? "";
+    if (
+      contentType.includes("text/html") ||
+      /^\s*<(?:!doctype|html)/i.test(text.slice(0, 256))
+    ) {
+      return new HtbError({
+        code: "INVALID_RESPONSE",
+        message: `HTB returned an HTML page instead of API JSON (${response.status}).`,
+        status: response.status,
+        endpoint,
+        hint: "Check HTB_LABS_URL (default https://labs.hackthebox.com). The browser URL app.hackthebox.com/api/v4 serves the web app.",
+      });
+    }
+
     if (response.status === 401 || response.status === 403) {
       return new HtbError({
         code: "AUTH_FAILED",

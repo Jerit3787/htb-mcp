@@ -244,6 +244,17 @@ export async function connectOpenVpn(
     return alreadyRunning;
   }
 
+  const otherTunnel = existing.find(
+    (process) => process.running && process.configPath !== safePath,
+  );
+  if (otherTunnel) {
+    throw new HtbError({
+      code: "OPENVPN_ERROR",
+      message: `Another HTB OpenVPN tunnel is already running (PID ${otherTunnel.pid}).`,
+      hint: "Call htb_vpn_disconnect first, then retry.",
+    });
+  }
+
   await mkdir(config.vpnDir, { recursive: true, mode: 0o700 });
   const stem = basename(safePath).replace(/\.ovpn$/i, "");
   const pidFile = resolve(config.vpnDir, `${stem}.pid`);
@@ -263,6 +274,8 @@ export async function connectOpenVpn(
     "--log",
     logFile,
     "--auth-nocache",
+    "--script-security",
+    "1",
   ];
 
   try {
@@ -378,7 +391,11 @@ export function ensureInsideVpnDir(config: AppConfig, candidate: string): string
 async function findOpenVpnConfigPath(pid: number): Promise<string | null> {
   try {
     const raw = await readFile(`/proc/${pid}/cmdline`, "utf8");
-    const args = raw.split("\0");
+    const args = raw.split("\0").filter(Boolean);
+    const executable = args[0]?.split("/").at(-1) ?? "";
+    if (!executable.startsWith("openvpn")) {
+      return null;
+    }
     const index = args.indexOf("--config");
     return index >= 0 ? args[index + 1] ?? null : null;
   } catch {

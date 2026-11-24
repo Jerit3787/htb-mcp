@@ -374,6 +374,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Assign your account to another VPN server. HTB may terminate an active machine when the server changes, so this tool refuses unless force=true. Prefer htb_vpn_resolve for automatic least-busy selection.",
       inputSchema: {
         server_id: z.number().int().positive().describe("VPN server ID from htb_vpn_servers."),
+        product: productSchema,
         force: z
           .boolean()
           .default(false)
@@ -392,7 +393,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const before = await api.getConnections();
-      const current = before.find((connection) => connection.type === "labs")?.assignedServer;
+      const current = before.find(
+        (connection) => connection.type === args.product,
+      )?.assignedServer;
       if (current?.id === args.server_id) {
         return {
           action: "unchanged",

@@ -43,14 +43,6 @@ export function loadDotEnv(path = ".env"): void {
   }
 }
 
-export function requireAuth(config: AppConfig): void {
-  if (!config.token && !config.sessionCookie) {
-    throw new Error(
-      "HTB_TOKEN is not set. Create an App Token at https://app.hackthebox.com/settings and pass it as HTB_TOKEN.",
-    );
-  }
-}
-
 function normalizeUrl(value: string): string {
   const url = new URL(value.trim());
   if (url.protocol !== "https:" && url.protocol !== "http:") {

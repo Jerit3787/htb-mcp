@@ -1,4 +1,4 @@
-import type { ApiVersion, HtbClient, QueryValue } from "./client.js";
+import type { HtbClient, QueryValue } from "./client.js";
 import { HtbError } from "./errors.js";
 
 export interface ActiveMachine {
@@ -592,9 +592,6 @@ export class HtbApi {
     };
   }
 
-  apiVersion(): ApiVersion {
-    return "v4";
-  }
 }
 
 function normalizeActiveMachine(info: Record<string, unknown>): ActiveMachine {
