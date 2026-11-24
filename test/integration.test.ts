@@ -77,6 +77,14 @@ test("speaks MCP over stdio and calls the mock HTB API", { timeout: 30_000 }, as
     const machines = listed.machines as JsonBody[];
     assert.equal(machines[0]?.name, "Sunday");
 
+    const switchResult = await client.callTool({
+      name: "htb_vpn_switch",
+      arguments: { server_id: 999 },
+    });
+    const switchError = parseToolError(switchResult);
+    assert.equal(switchError.error, "API_ERROR");
+    assert.match(String(switchError.message), /rejected/);
+
     const launchResult = await client.callTool({
       name: "htb_launch_machine",
       arguments: { target: "Sunday", wait_seconds: 5 },
@@ -151,6 +159,17 @@ function respond(
     return;
   }
 
+  if (
+    url.pathname === "/api/v4/connections/servers/switch/999" &&
+    req.method === "POST"
+  ) {
+    send({
+      status: false,
+      message: "You cannot switch VPN server while a machine is active.",
+    });
+    return;
+  }
+
   if (url.pathname === "/api/v5/machines") {
     send({
       data: [
@@ -180,6 +199,15 @@ function respond(
 
 function parseToolJson(result: Awaited<ReturnType<Client["callTool"]>>): JsonBody {
   assert.equal(result.isError, undefined);
+  return parseToolText(result);
+}
+
+function parseToolError(result: Awaited<ReturnType<Client["callTool"]>>): JsonBody {
+  assert.equal(result.isError, true);
+  return parseToolText(result);
+}
+
+function parseToolText(result: Awaited<ReturnType<Client["callTool"]>>): JsonBody {
   const content = result.content;
   assert.ok(Array.isArray(content));
   const first = content[0] as { type?: string; text?: string } | undefined;

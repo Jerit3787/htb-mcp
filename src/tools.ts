@@ -748,7 +748,11 @@ function assertActionSucceeded(
   response: Record<string, unknown>,
   action: string,
 ): void {
-  if (response.success !== false) {
+  const failed =
+    response.success === false ||
+    response.success === 0 ||
+    response.status === false;
+  if (!failed) {
     return;
   }
 
