@@ -7,7 +7,7 @@
     "htb-mcp": "dist/src/index.js"
   },
   "files": [
-    "dist",
+    "dist/src",
     "README.md",
     "LICENSE"
   ],
@@ -19,7 +19,8 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
     "test": "npm run build && node --test --test-concurrency=1 dist/test/*.test.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
   },
   "keywords": [
     "hackthebox",
