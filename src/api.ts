@@ -145,16 +145,16 @@ export class HtbApi {
 
   async listMachines(input: {
     state: "active" | "retired" | "unreleased" | "all";
-    difficulty?: string;
-    os?: string;
-    keyword?: string;
-    page?: number;
-    perPage?: number;
-    free?: boolean;
-    todo?: boolean;
-    completed?: "complete" | "incomplete";
-    sortBy?: string;
-    sortType?: "asc" | "desc";
+    difficulty?: string | undefined;
+    os?: string | undefined;
+    keyword?: string | undefined;
+    page?: number | undefined;
+    perPage?: number | undefined;
+    free?: boolean | undefined;
+    todo?: boolean | undefined;
+    completed?: "complete" | "incomplete" | undefined;
+    sortBy?: string | undefined;
+    sortType?: "asc" | "desc" | undefined;
   }): Promise<{ machines: MachineSummary[]; meta: Record<string, unknown> }> {
     const query: Record<string, QueryValue> = {
       page: input.page ?? 1,
@@ -298,6 +298,24 @@ export class HtbApi {
     return this.client.post<Record<string, unknown>>("/vm/extend", {
       body: { machine_id: machineId },
     });
+  }
+
+  async waitForNoActiveMachine(
+    timeoutMs: number,
+    intervalMs = 2_000,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    do {
+      const active = await this.getActiveMachine();
+      if (!active) {
+        return true;
+      }
+      if (Date.now() >= deadline) {
+        return false;
+      }
+      await sleep(intervalMs);
+    } while (Date.now() < deadline);
+    return false;
   }
 
   async waitForActiveMachine(
@@ -485,12 +503,12 @@ export class HtbApi {
 
   async listChallenges(input: {
     state: "active" | "retired" | "unreleased" | "all";
-    difficulty?: string;
-    category?: number;
-    keyword?: string;
-    completed?: "complete" | "incompleted";
-    page?: number;
-    perPage?: number;
+    difficulty?: string | undefined;
+    category?: number | undefined;
+    keyword?: string | undefined;
+    completed?: "complete" | "incompleted" | undefined;
+    page?: number | undefined;
+    perPage?: number | undefined;
   }): Promise<{ challenges: Record<string, unknown>[]; meta: Record<string, unknown> }> {
     const states =
       input.state === "all"
