@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "htb": {
+        "type": "local",
+        "command": [
+          "node",
+          "/absolute/path/to/htb-mcp/dist/src/index.js"
+        ],
+        "environment": {
+          "HTB_TOKEN": "{env:HTB_TOKEN}"
+        }
+      }
+    }
+  }
+}

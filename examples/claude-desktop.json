@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "htb": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/htb-mcp/dist/src/index.js"
+      ],
+      "env": {
+        "HTB_TOKEN": "your-app-token"
+      }
+    }
+  }
+}

@@ -110,6 +110,8 @@ Then export `HTB_TOKEN` in the environment that starts OpenCode.
 | `htb_list_challenges` | Search/filter challenges |
 | `htb_get_challenge` | Challenge details by ID or slug |
 
+See [`docs/tools.md`](docs/tools.md) for inputs, side effects, and error codes.
+
 ## Configuration
 
 | Environment variable | Default | Description |
