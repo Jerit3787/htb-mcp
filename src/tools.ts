@@ -203,7 +203,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
             hint: "Stop it first with htb_stop_machine, or pass replace: true to terminate it automatically.",
           });
         }
-        await api.terminateMachine(active.id);
+        const terminateResponse = await api.terminateMachine(active.id);
+        assertActionSucceeded(terminateResponse, "terminate the active machine");
         const cleared = await api.waitForNoActiveMachine(30_000);
         if (!cleared) {
           throw new HtbError({
