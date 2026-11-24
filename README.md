@@ -1,5 +1,7 @@
 # htb-mcp
 
+[![CI](https://github.com/Jerit3787/htb-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Jerit3787/htb-mcp/actions/workflows/ci.yml)
+
 An MCP server for [Hack The Box](https://app.hackthebox.com) that lets an AI
 agent inspect machines, spawn and reset targets, resolve/download/connect the
 VPN, submit flags, and browse challenges.
@@ -38,6 +40,12 @@ git clone https://github.com/Jerit3787/htb-mcp.git
 cd htb-mcp
 npm ci
 npm run build
+```
+
+Or let npm build it directly from GitHub:
+
+```bash
+npx --yes github:Jerit3787/htb-mcp
 ```
 
 Create a token in HTB under **Settings → App Tokens**, then run:
