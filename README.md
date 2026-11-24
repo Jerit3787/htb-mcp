@@ -117,7 +117,7 @@ See [`docs/tools.md`](docs/tools.md) for inputs, side effects, and error codes.
 | Environment variable | Default | Description |
 | --- | --- | --- |
 | `HTB_TOKEN` | — | App Token (required unless a session cookie is supplied) |
-| `HTB_SESSION_COOKIE` | — | Optional browser cookie for endpoints that reject token auth |
+| `HTB_SESSION_COOKIE` | — | Optional browser cookie for endpoints that reject token auth; supply the whole `Cookie` header from an `app.hackthebox.com` request |
 | `HTB_LABS_URL` | `https://labs.hackthebox.com` | API host; useful for mocks/proxies |
 | `HTB_TIMEOUT_MS` | `30000` | Per-request timeout |
 | `HTB_MAX_RETRIES` | `2` | Retries for GET/429 responses |
@@ -127,6 +127,10 @@ See [`docs/tools.md`](docs/tools.md) for inputs, side effects, and error codes.
 
 Profiles contain private keys and are written with mode `0600`. Do not commit
 them.
+
+If App Token auth returns `AUTH_FAILED`, copy the full `Cookie` request header
+from a logged-in `app.hackthebox.com` request into `HTB_SESSION_COOKIE`. The
+token and cookie can also be used together.
 
 ## VPN notes
 
