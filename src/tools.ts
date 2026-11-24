@@ -1,6 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { HtbApi, MachineSummary, VpnServer } from "./api.js";
+import type {
+  ActiveMachine,
+  HtbApi,
+  MachineSummary,
+  VpnConnection,
+  VpnServer,
+} from "./api.js";
 import type { AppConfig } from "./config.js";
 import { HtbError, toHtbError } from "./errors.js";
 import {
@@ -61,8 +67,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       return {
         api: config.labsUrl,
         user: status.user,
-        activeMachine: status.activeMachine,
-        vpnAssignments: status.connections,
+        activeMachine: status.activeMachine
+          ? activeMachineView(status.activeMachine)
+          : null,
+        vpnAssignments: status.connections.map(connectionView),
         errors: status.errors,
       };
     }),
@@ -172,14 +180,15 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         if (active.ip && !active.isSpawning) {
           return {
             action: "already_active",
-            machine: active,
+            machine: activeMachineView(active),
             message: `Machine "${active.name}" is already running at ${active.ip}.`,
           };
         }
         const ready = await api.waitForActiveMachine(machine.id, args.wait_seconds * 1000);
+        const current = ready ?? active;
         return {
           action: ready?.ip ? "already_active" : "spawning",
-          machine: ready ?? active,
+          machine: activeMachineView(current),
           message: ready?.ip
             ? `Machine "${ready.name}" is ready at ${ready.ip}.`
             : "Machine is still spawning. Call htb_status for an update.",
@@ -211,14 +220,14 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (ready?.ip && !ready.isSpawning) {
         return {
           action: "spawned",
-          machine: ready,
+          machine: activeMachineView(ready),
           spawnResponse,
         };
       }
 
       return {
         action: "spawning",
-        machine: ready,
+        machine: ready ? activeMachineView(ready) : null,
         spawnResponse,
         message:
           "HTB accepted the spawn, but no IP was available before the timeout. Call htb_status in a few seconds.",
@@ -255,7 +264,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.terminateMachine(active.id);
-      return { action: "terminated", machine: active, response };
+      return {
+        action: "terminated",
+        machine: activeMachineView(active),
+        response,
+      };
     }),
   );
 
@@ -291,7 +304,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.resetMachine(active.id);
-      return { action: "reset_requested", machine: active, response };
+      return {
+        action: "reset_requested",
+        machine: activeMachineView(active),
+        response,
+      };
     }),
   );
 
@@ -326,7 +343,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       }
 
       const response = await api.extendMachine(active.id);
-      return { action: "extended", machine: active, response };
+      return {
+        action: "extended",
+        machine: activeMachineView(active),
+        response,
+      };
     }),
   );
 
@@ -716,6 +737,33 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       };
     }),
   );
+}
+
+function activeMachineView(machine: ActiveMachine): Record<string, unknown> {
+  return {
+    id: machine.id,
+    name: machine.name,
+    ip: machine.ip,
+    isSpawning: machine.isSpawning,
+    expiresAt: machine.expiresAt,
+    type: machine.type,
+    labServer: machine.labServer,
+    vpnServerId: machine.vpnServerId,
+    vpnServerType: machine.vpnServerType,
+  };
+}
+
+function connectionView(connection: VpnConnection): Record<string, unknown> {
+  return {
+    type: connection.type,
+    location: connection.locationTypeFriendly,
+    server: connection.assignedServer
+      ? vpnServerView(connection.assignedServer)
+      : null,
+    machine: connection.machine,
+    proLab: connection.proLab,
+    available: connection.available,
+  };
 }
 
 function machineView(machine: MachineSummary): Record<string, unknown> {
