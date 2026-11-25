@@ -8,6 +8,8 @@ export function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     timeoutMs: 5_000,
     maxRetries: 2,
     vpnDir: "/tmp/htb-mcp-test-vpn",
+    downloadDir: "/tmp/htb-mcp-test-downloads",
+    downloadTimeoutMs: 30_000,
     openvpnBin: "openvpn",
     openvpnUseSudo: false,
     ...overrides,

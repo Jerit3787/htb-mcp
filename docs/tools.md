@@ -101,20 +101,105 @@ Profiles are restricted to the managed directory, symlinks are checked, and
 Stops one PID file or every managed tunnel. Only processes whose command line is
 OpenVPN and whose `--config` path is managed by this server are touched.
 
-## Flags and challenges
+## Challenges
+
+### `htb_list_challenges`
+
+Filters by state, difficulty, numeric category ID, keyword, completion, and
+todo status. Supports HTB sort fields (`release-date`, `name`, `rating`, and
+others) and pagination.
+
+### `htb_list_challenge_categories`
+
+Lists challenge categories with the numeric IDs accepted by
+`htb_list_challenges.category`.
+
+### `htb_get_challenge`
+
+Accepts an ID, slug, or name. Returns category, difficulty, description,
+download metadata, Docker status, play info, and solve state.
+
+### `htb_start_challenge`
+
+`target` accepts an ID, slug, or name. Starts the challenge's Docker instance
+using `POST /container/start` with `{"containerable_id": <id>}`, then polls the
+challenge profile for up to `wait_seconds` (default 60).
+
+Returns `action: "started"` with `container.ip`, `container.ports`,
+`container.expiresAt`, or `action: "starting"` when HTB has not exposed the IP
+yet. If a container is already running, it returns `action: "already_running"`.
+Challenges without a Docker instance fail with `CONFLICT`.
+
+HTB allows one challenge container at a time. Starting another challenge can
+replace the current container.
+
+### `htb_stop_challenge`
+
+Stops the challenge's Docker instance using `POST /container/stop`. This ends
+the remote service immediately.
+
+### `htb_challenge_status`
+
+Read-only check for a challenge container, returning `running`, `container`,
+`dockerStatus`, and whether the challenge has downloadable files.
+
+### `htb_download_challenge`
+
+Downloads the challenge attachment archive into
+`HTB_DOWNLOAD_DIR/challenges/<id>/`. The tool requests a fresh signed URL,
+fetches it without the App Token, and writes the file with mode `0600`.
+
+Returns `path`, `fileName`, `bytes`, `sha256`, `filePassword` when HTB provides
+one, and `expectedSha256` when the challenge profile includes a checksum.
+Archives are not extracted.
+
+## Sherlocks
+
+### `htb_list_sherlocks`
+
+Filters by state, difficulty, numeric category ID, keyword, and completion.
+Supports `solves`, `category`, `rating`, and `name` sorting.
+
+### `htb_list_sherlock_categories`
+
+Lists Sherlock categories with the numeric IDs accepted by
+`htb_list_sherlocks.category`.
+
+### `htb_get_sherlock`
+
+Accepts an ID, slug, or name. Combines the Sherlock profile, scenario,
+creators, evidence metadata, play info, academy modules, and progress.
+
+### `htb_sherlock_tasks`
+
+Lists task IDs, titles, descriptions, hints, masked answers, completion state,
+and prerequisite task IDs. Hints and masked answers are returned as HTB sends
+them.
+
+### `htb_sherlock_progress`
+
+Returns `isOwned`, `ownRank`, `progress`, `tasksAnswered`, and `totalTasks`.
+
+### `htb_download_sherlock`
+
+Downloads the evidence archive into
+`HTB_DOWNLOAD_DIR/sherlocks/<id>/` using the same signed-link and path-safety
+rules as challenge downloads. Returns `path`, `fileName`, `bytes`, `sha256`,
+and `filePassword` when available.
+
+### `htb_submit_sherlock_answer`
+
+Requires `target`, `task_id` (from `htb_sherlock_tasks`), and `flag`. HTB
+returns a success message for a correct answer; an incorrect answer, locked
+prerequisite, or unknown task becomes an `API_ERROR` containing HTB's message.
+
+## Flags
 
 ### `htb_submit_flag`
 
 `kind` is `machine` or `challenge`; `flag` is required. Machine targets default
-to the active machine. Challenge targets can be an ID or slug.
-
-### `htb_list_challenges`
-
-Filters by state, difficulty, numeric category ID, keyword, and completion.
-
-### `htb_get_challenge`
-
-Returns a compact challenge profile by ID or slug.
+to the active machine. Challenge targets can be an ID, slug, or name. Use
+`htb_submit_sherlock_answer` for Sherlock tasks.
 
 ## Error codes
 

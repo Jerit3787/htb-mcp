@@ -22,9 +22,11 @@ const server = new McpServer(
     instructions: [
       "Unofficial Hack The Box MCP server.",
       "Start with htb_status to confirm authentication and see active resources.",
-      "Machine spawn/reset/stop, VPN switching, and flag submission change real account state.",
+      "Machine spawn/reset/stop, challenge container start/stop, VPN switching, and flag submission change real account state.",
+      "Only one challenge container can run at a time; starting another can replace it.",
+      "Sherlock tasks are answered individually with htb_submit_sherlock_answer.",
+      "Downloads are written under HTB_DOWNLOAD_DIR; never print App Tokens or OpenVPN private keys.",
       "Switching VPN servers can terminate an active machine; ask before forcing it.",
-      "Never print App Tokens or OpenVPN private keys.",
     ].join(" "),
   },
 );

@@ -88,6 +88,124 @@ export interface MachineResolution {
   raw?: Record<string, unknown>;
 }
 
+export interface PlayInfo {
+  status: string | null;
+  ip: string | null;
+  ports: number[];
+  expiresAt: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface ChallengeCategory {
+  id: number;
+  name: string;
+  icon: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface ChallengeSummary {
+  id: number;
+  name: string;
+  category: string | null;
+  categoryId: number | null;
+  difficulty: string | null;
+  points: number | null;
+  state: string | null;
+  retired: boolean | null;
+  solves: number | null;
+  rating: number | null;
+  owned: boolean;
+  todo: boolean;
+  hasDownload: boolean | null;
+  hasDocker: boolean | null;
+  releaseDate: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface ChallengeDetails extends ChallengeSummary {
+  description: string | null;
+  creator: string | null;
+  filePassword: string | null;
+  fileName: string | null;
+  fileSize: string | null;
+  sha256: string | null;
+  dockerStatus: string | null;
+  dockerIp: string | null;
+  dockerPorts: number[];
+  playInfo: PlayInfo | null;
+}
+
+export interface DownloadLink {
+  url: string;
+  expiresIn: number | null;
+  raw: Record<string, unknown>;
+}
+
+export interface SherlockSummary {
+  id: number;
+  name: string;
+  category: string | null;
+  categoryId: number | null;
+  difficulty: string | null;
+  state: string | null;
+  solves: number | null;
+  rating: number | null;
+  owned: boolean;
+  progress: number | null;
+  releaseDate: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface SherlockDetails extends SherlockSummary {
+  description: string | null;
+  scenario: string | null;
+  creators: string[];
+  fileName: string | null;
+  fileSize: string | null;
+  filePassword: string | null;
+  academyModules: Record<string, unknown>[];
+  playInfo: PlayInfo | null;
+  blood: Record<string, unknown> | null;
+  userOwnsCount: number | null;
+  isOwned: boolean;
+  ownRank: number | null;
+  tasksAnswered: number | null;
+  totalTasks: number | null;
+}
+
+export interface SherlockTask {
+  id: number;
+  title: string | null;
+  description: string | null;
+  hint: string | null;
+  completed: boolean;
+  maskedFlag: string | null;
+  taskType: string | null;
+  taskTypeId: number | null;
+  options: unknown[];
+  prerequisiteId: number | null;
+  raw: Record<string, unknown>;
+}
+
+export interface SherlockProgress {
+  isOwned: boolean;
+  ownRank: number | null;
+  progress: number | null;
+  tasksAnswered: number | null;
+  totalTasks: number | null;
+  raw: Record<string, unknown>;
+}
+
+export interface ChallengeListResult {
+  challenges: ChallengeSummary[];
+  meta: Record<string, unknown>;
+}
+
+export interface SherlockListResult {
+  sherlocks: SherlockSummary[];
+  meta: Record<string, unknown>;
+}
+
 interface MachinesResponse {
   data?: unknown[];
   meta?: Record<string, unknown>;
@@ -486,9 +604,12 @@ export class HtbApi {
     category?: number | undefined;
     keyword?: string | undefined;
     completed?: "complete" | "incompleted" | undefined;
+    todo?: boolean | undefined;
+    sortBy?: string | undefined;
+    sortType?: "asc" | "desc" | undefined;
     page?: number | undefined;
     perPage?: number | undefined;
-  }): Promise<{ challenges: Record<string, unknown>[]; meta: Record<string, unknown> }> {
+  }): Promise<ChallengeListResult> {
     const states =
       input.state === "all"
         ? ["active", "retired"]
@@ -505,6 +626,9 @@ export class HtbApi {
         "difficulty[]": input.difficulty,
         "category[]": input.category,
         keyword: input.keyword,
+        todo: input.todo ? 1 : undefined,
+        sort_by: input.sortBy,
+        sort_type: input.sortType,
       },
     });
     const data = Array.isArray(response.data) ? response.data : [];
@@ -516,7 +640,12 @@ export class HtbApi {
     };
   }
 
-  async getChallenge(target: string): Promise<Record<string, unknown>> {
+  async listChallengeCategories(): Promise<ChallengeCategory[]> {
+    const response = await this.client.get<unknown>("/challenge/categories/list");
+    return normalizeCategories(response);
+  }
+
+  async getChallenge(target: string): Promise<ChallengeDetails> {
     const response = await this.client.get<{
       challenge?: Record<string, unknown>;
     }>(`/challenge/info/${encodeURIComponent(target)}`);
@@ -526,7 +655,104 @@ export class HtbApi {
         message: `Challenge "${target}" was not found.`,
       });
     }
-    return response.challenge;
+    return normalizeChallengeDetails(response.challenge);
+  }
+
+  async resolveChallenge(
+    target: string | number,
+  ): Promise<{ id: number; name: string; raw: Record<string, unknown> }> {
+    const text = String(target).trim();
+    if (/^\d+$/.test(text)) {
+      const challenge = await this.getChallenge(text);
+      return { id: challenge.id, name: challenge.name, raw: challenge.raw };
+    }
+
+    const variants = uniqueStrings([text, slugify(text)]);
+    for (const variant of variants) {
+      try {
+        const challenge = await this.getChallenge(variant);
+        return { id: challenge.id, name: challenge.name, raw: challenge.raw };
+      } catch (error) {
+        if (!(error instanceof HtbError) || error.code !== "NOT_FOUND") {
+          throw error;
+        }
+      }
+    }
+
+    const matches = await this.listChallenges({
+      state: "all",
+      keyword: text,
+      perPage: 100,
+    });
+    const exact = matches.challenges.find(
+      (challenge) => challenge.name.toLowerCase() === text.toLowerCase(),
+    );
+    if (exact) {
+      return { id: exact.id, name: exact.name, raw: exact.raw };
+    }
+
+    const partial = matches.challenges.filter((challenge) =>
+      challenge.name.toLowerCase().includes(text.toLowerCase()),
+    );
+    if (partial.length === 1 && partial[0]) {
+      return { id: partial[0].id, name: partial[0].name, raw: partial[0].raw };
+    }
+
+    throw new HtbError({
+      code: "NOT_FOUND",
+      message: `No challenge named "${text}" was found.`,
+      hint:
+        partial.length > 1
+          ? `Did you mean: ${partial
+              .slice(0, 5)
+              .map((challenge) => challenge.name)
+              .join(", ")}?`
+          : "Use htb_list_challenges to search the catalogue.",
+    });
+  }
+
+  async startChallengeContainer(
+    challengeId: number,
+  ): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>("/container/start", {
+      body: { containerable_id: challengeId },
+    });
+  }
+
+  async stopChallengeContainer(
+    challengeId: number,
+  ): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>("/container/stop", {
+      body: { containerable_id: challengeId },
+    });
+  }
+
+  async waitForChallengeContainer(
+    challengeId: number,
+    timeoutMs: number,
+    intervalMs = 3_000,
+  ): Promise<ChallengeDetails> {
+    const deadline = Date.now() + timeoutMs;
+    let latest = await this.getChallenge(String(challengeId));
+
+    do {
+      if (challengeContainerReady(latest)) {
+        return latest;
+      }
+      if (Date.now() >= deadline) {
+        break;
+      }
+      await sleep(intervalMs);
+      latest = await this.getChallenge(String(challengeId));
+    } while (Date.now() < deadline);
+
+    return latest;
+  }
+
+  async getChallengeDownloadLink(challengeId: number): Promise<DownloadLink> {
+    const endpoint = `/challenges/${challengeId}/download_link`;
+    const response = await this.client.get<unknown>(endpoint);
+    return normalizeDownloadLink(response, endpoint);
   }
 
   async submitChallengeFlag(
@@ -536,6 +762,223 @@ export class HtbApi {
     return this.client.post<Record<string, unknown>>("/challenge/own", {
       body: { challenge_id: challengeId, flag },
     });
+  }
+
+  async listSherlocks(input: {
+    state: "active" | "retired" | "unreleased" | "all";
+    difficulty?: string | undefined;
+    category?: number | undefined;
+    keyword?: string | undefined;
+    completed?: "complete" | "incompleted" | undefined;
+    sortBy?: string | undefined;
+    sortType?: "asc" | "desc" | undefined;
+    page?: number | undefined;
+    perPage?: number | undefined;
+  }): Promise<SherlockListResult> {
+    const states =
+      input.state === "all"
+        ? ["active", "retired"]
+        : [input.state];
+    const response = await this.client.get<{
+      data?: unknown[];
+      meta?: Record<string, unknown>;
+    }>("/sherlocks", {
+      query: {
+        page: input.page ?? 1,
+        per_page: input.perPage ?? 25,
+        status: input.completed,
+        state: states,
+        "difficulty[]": input.difficulty,
+        "category[]": input.category,
+        keyword: input.keyword,
+        sort_by: input.sortBy,
+        sort_type: input.sortType,
+      },
+    });
+    const data = Array.isArray(response.data) ? response.data : [];
+    return {
+      sherlocks: data.filter(isRecord).map(normalizeSherlockSummary),
+      meta: response.meta ?? {},
+    };
+  }
+
+  async listSherlockCategories(): Promise<ChallengeCategory[]> {
+    const response = await this.client.get<unknown>("/sherlocks/categories/list");
+    return normalizeCategories(response);
+  }
+
+  async resolveSherlock(
+    target: string | number,
+  ): Promise<{ id: number; name: string; raw: Record<string, unknown> }> {
+    const text = String(target).trim();
+    if (/^\d+$/.test(text)) {
+      const named = await this.getSherlockNamed(text);
+      return {
+        id: numberOrNull(named.id) ?? Number(text),
+        name: stringOrNull(named.name) ?? `sherlock-${text}`,
+        raw: named,
+      };
+    }
+
+    const variants = uniqueStrings([text, slugify(text)]);
+    for (const variant of variants) {
+      try {
+        const named = await this.getSherlockNamed(variant);
+        const id = numberOrNull(named.id);
+        if (id === null) {
+          continue;
+        }
+        return {
+          id,
+          name: stringOrNull(named.name) ?? variant,
+          raw: named,
+        };
+      } catch (error) {
+        if (!(error instanceof HtbError) || error.code !== "NOT_FOUND") {
+          throw error;
+        }
+      }
+    }
+
+    const matches = await this.listSherlocks({
+      state: "all",
+      keyword: text,
+      perPage: 100,
+    });
+    const exact = matches.sherlocks.find(
+      (sherlock) => sherlock.name.toLowerCase() === text.toLowerCase(),
+    );
+    if (exact) {
+      return { id: exact.id, name: exact.name, raw: exact.raw };
+    }
+
+    const partial = matches.sherlocks.filter((sherlock) =>
+      sherlock.name.toLowerCase().includes(text.toLowerCase()),
+    );
+    if (partial.length === 1 && partial[0]) {
+      return { id: partial[0].id, name: partial[0].name, raw: partial[0].raw };
+    }
+
+    throw new HtbError({
+      code: "NOT_FOUND",
+      message: `No Sherlock named "${text}" was found.`,
+      hint:
+        partial.length > 1
+          ? `Did you mean: ${partial
+              .slice(0, 5)
+              .map((sherlock) => sherlock.name)
+              .join(", ")}?`
+          : "Use htb_list_sherlocks to search the catalogue.",
+    });
+  }
+
+  async getSherlockNamed(target: string): Promise<Record<string, unknown>> {
+    const response = await this.client.get<{ data?: Record<string, unknown> }>(
+      `/sherlocks/${encodeURIComponent(target)}`,
+    );
+    if (!response.data) {
+      throw new HtbError({
+        code: "NOT_FOUND",
+        message: `Sherlock "${target}" was not found.`,
+      });
+    }
+    return response.data;
+  }
+
+  async getSherlockInfo(sherlockId: number): Promise<Record<string, unknown>> {
+    const response = await this.client.get<{ data?: Record<string, unknown> }>(
+      `/sherlocks/${sherlockId}/info`,
+    );
+    return response.data ?? {};
+  }
+
+  async getSherlockPlay(sherlockId: number): Promise<Record<string, unknown>> {
+    const response = await this.client.get<{ data?: Record<string, unknown> }>(
+      `/sherlocks/${sherlockId}/play`,
+    );
+    return response.data ?? {};
+  }
+
+  async getSherlockProgress(
+    sherlockId: number,
+  ): Promise<SherlockProgress> {
+    const response = await this.client.get<{ data?: Record<string, unknown> }>(
+      `/sherlocks/${sherlockId}/progress`,
+    );
+    return normalizeSherlockProgress(response.data ?? {});
+  }
+
+  async getSherlockTasks(sherlockId: number): Promise<SherlockTask[]> {
+    const response = await this.client.get<{ data?: unknown[] }>(
+      `/sherlocks/${sherlockId}/tasks`,
+    );
+    return Array.isArray(response.data)
+      ? response.data.filter(isRecord).map(normalizeSherlockTask)
+      : [];
+  }
+
+  async getSherlock(target: string | number): Promise<SherlockDetails> {
+    const resolved = await this.resolveSherlock(target);
+    const [info, play, progress] = await Promise.allSettled([
+      this.getSherlockInfo(resolved.id),
+      this.getSherlockPlay(resolved.id),
+      this.getSherlockProgress(resolved.id),
+    ]);
+
+    const results = [info, play, progress];
+    if (results.every((result) => result.status === "rejected")) {
+      throw results[0]?.status === "rejected"
+        ? results[0].reason
+        : new HtbError({
+            code: "API_ERROR",
+            message: `Could not load Sherlock "${resolved.name}".`,
+          });
+    }
+
+    const summary = normalizeSherlockSummary(resolved.raw);
+    const infoData = info.status === "fulfilled" ? info.value : {};
+    const playData = play.status === "fulfilled" ? play.value : {};
+    const progressData =
+      progress.status === "fulfilled" ? progress.value : null;
+
+    return {
+      ...summary,
+      description: stringOrNull(infoData.description),
+      scenario: stringOrNull(playData.scenario),
+      creators: normalizeCreators(playData.creators),
+      fileName: stringOrNull(playData.file_name),
+      fileSize: stringOrNull(playData.file_size),
+      filePassword: stringOrNull(
+        resolved.raw.file_password ?? playData.file_password,
+      ),
+      academyModules: Array.isArray(infoData.academyModules)
+        ? infoData.academyModules.filter(isRecord)
+        : [],
+      playInfo: normalizePlayInfo(playData.play_info),
+      blood: isRecord(playData.blood) ? playData.blood : null,
+      userOwnsCount: numberOrNull(infoData.user_owns_count),
+      isOwned: progressData?.isOwned ?? summary.owned,
+      ownRank: progressData?.ownRank ?? null,
+      tasksAnswered: progressData?.tasksAnswered ?? null,
+      totalTasks: progressData?.totalTasks ?? null,
+    };
+  }
+
+  async getSherlockDownloadLink(sherlockId: number): Promise<DownloadLink> {
+    const endpoint = `/sherlocks/${sherlockId}/download_link`;
+    const response = await this.client.get<unknown>(endpoint);
+    return normalizeDownloadLink(response, endpoint);
+  }
+
+  async submitSherlockTask(
+    sherlockId: number,
+    taskId: number,
+    flag: string,
+  ): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(
+      `/sherlocks/${sherlockId}/tasks/${taskId}/flag`,
+      { body: { flag } },
+    );
   }
 
   async getStatus(): Promise<{
@@ -657,19 +1100,186 @@ function normalizeVpnServer(raw: Record<string, unknown>): VpnServer {
   };
 }
 
-function normalizeChallengeSummary(raw: Record<string, unknown>): Record<string, unknown> {
+function normalizeChallengeSummary(raw: Record<string, unknown>): ChallengeSummary {
   return {
-    id: numberOrNull(raw.id),
-    name: stringOrNull(raw.name),
+    id: numberOrNull(raw.id) ?? 0,
+    name: stringOrNull(raw.name) ?? "unknown",
     category: stringOrNull(raw.category_name),
+    categoryId: numberOrNull(raw.category_id),
+    difficulty: stringOrNull(raw.difficulty),
+    points: numberOrNull(raw.points),
+    state: stringOrNull(raw.state),
+    retired: booleanOrNull(raw.retired),
+    solves: numberOrNull(raw.solves),
+    rating: numberOrNull(raw.rating ?? raw.stars),
+    owned: Boolean(raw.is_owned || raw.authUserSolve),
+    todo: Boolean(raw.isTodo ?? raw.todo),
+    hasDownload: booleanOrNull(raw.download),
+    hasDocker: booleanOrNull(raw.docker),
+    releaseDate: stringOrNull(raw.release_date ?? raw.release_at),
+    raw,
+  };
+}
+
+function normalizeChallengeDetails(raw: Record<string, unknown>): ChallengeDetails {
+  return {
+    ...normalizeChallengeSummary(raw),
+    description: stringOrNull(raw.description),
+    creator: stringOrNull(raw.creator_name),
+    filePassword: stringOrNull(raw.file_password),
+    fileName: stringOrNull(raw.file_name),
+    fileSize: stringOrNull(raw.file_size),
+    sha256: stringOrNull(raw.sha256),
+    dockerStatus: stringOrNull(raw.docker_status),
+    dockerIp: stringOrNull(raw.docker_ip),
+    dockerPorts: numberArray(raw.docker_ports),
+    playInfo: normalizePlayInfo(raw.play_info),
+  };
+}
+
+function normalizeSherlockSummary(raw: Record<string, unknown>): SherlockSummary {
+  return {
+    id: numberOrNull(raw.id) ?? 0,
+    name: stringOrNull(raw.name) ?? "unknown",
+    category: stringOrNull(raw.category_name),
+    categoryId: numberOrNull(raw.category_id),
     difficulty: stringOrNull(raw.difficulty),
     state: stringOrNull(raw.state),
     solves: numberOrNull(raw.solves),
     rating: numberOrNull(raw.rating),
     owned: Boolean(raw.is_owned),
-    releaseDate: stringOrNull(raw.release_date),
+    progress: numberOrNull(raw.progress),
+    releaseDate: stringOrNull(raw.release_date ?? raw.release_at),
     raw,
   };
+}
+
+function normalizeSherlockTask(raw: Record<string, unknown>): SherlockTask {
+  const taskType = isRecord(raw.task_type ?? raw.type)
+    ? (raw.task_type ?? raw.type) as Record<string, unknown>
+    : null;
+  return {
+    id: numberOrNull(raw.id) ?? 0,
+    title: stringOrNull(raw.title),
+    description: stringOrNull(raw.description),
+    hint: stringOrNull(raw.hint),
+    completed: Boolean(raw.completed),
+    maskedFlag: stringOrNull(raw.masked_flag),
+    taskType: stringOrNull(taskType?.text),
+    taskTypeId: numberOrNull(taskType?.id),
+    options: Array.isArray(raw.options) ? raw.options : [],
+    prerequisiteId: numberOrNull(raw.prerequisite_id),
+    raw,
+  };
+}
+
+function normalizeSherlockProgress(raw: Record<string, unknown>): SherlockProgress {
+  return {
+    isOwned: Boolean(raw.is_owned),
+    ownRank: numberOrNull(raw.own_rank),
+    progress: numberOrNull(raw.progress),
+    tasksAnswered: numberOrNull(raw.tasks_answered),
+    totalTasks: numberOrNull(raw.total_tasks),
+    raw,
+  };
+}
+
+function normalizeCategories(value: unknown): ChallengeCategory[] {
+  const info =
+    isRecord(value) && Array.isArray(value.info)
+      ? value.info
+      : Array.isArray(value)
+        ? value
+        : [];
+  return info
+    .filter(isRecord)
+    .map((raw) => ({
+      id: numberOrNull(raw.id) ?? 0,
+      name: stringOrNull(raw.name) ?? "unknown",
+      icon: stringOrNull(raw.icon),
+      raw,
+    }))
+    .filter((category) => category.id > 0);
+}
+
+function normalizeDownloadLink(value: unknown, endpoint: string): DownloadLink {
+  const record = isRecord(value) ? value : {};
+  const data = isRecord(record.data) ? record.data : record;
+  const url = stringOrNull(data.url ?? data.download_url);
+  if (!url) {
+    throw new HtbError({
+      code: "INVALID_RESPONSE",
+      message: "HTB did not return a download URL.",
+      endpoint,
+      hint: "The resource may have no downloadable files, or the link endpoint changed.",
+    });
+  }
+  return {
+    url,
+    expiresIn: numberOrNull(data.expires_in ?? data.expiresIn),
+    raw: record,
+  };
+}
+
+function normalizePlayInfo(value: unknown): PlayInfo | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return {
+    status: stringOrNull(value.status),
+    ip: stringOrNull(value.ip),
+    ports: numberArray(value.ports),
+    expiresAt: stringOrNull(value.expires_at),
+    raw: value,
+  };
+}
+
+function normalizeCreators(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((creator) =>
+      isRecord(creator)
+        ? stringOrNull(creator.name ?? creator.username)
+        : stringOrNull(creator),
+    )
+    .filter((creator): creator is string => creator !== null);
+}
+
+function numberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => numberOrNull(item))
+    .filter((item): item is number => item !== null);
+}
+
+function challengeContainerReady(challenge: ChallengeDetails): boolean {
+  const ip = challenge.playInfo?.ip ?? challenge.dockerIp;
+  const ports = challenge.playInfo?.ports.length
+    ? challenge.playInfo.ports
+    : challenge.dockerPorts;
+  const status = (
+    challenge.playInfo?.status ??
+    challenge.dockerStatus ??
+    ""
+  ).toLowerCase();
+  const inactive = /expired|stopped|terminated|failed|error/.test(status);
+  return Boolean(ip) && ports.length > 0 && !inactive;
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value !== ""))];
 }
 
 function flattenServers(value: unknown, output: Record<string, unknown>[]): void {

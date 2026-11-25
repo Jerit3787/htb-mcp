@@ -197,6 +197,171 @@ test("rejects non-profile payloads", async () => {
   );
 });
 
+test("lists challenge categories", async () => {
+  const api = apiWithFetch((url) => {
+    assert.equal(url.pathname, "/api/v4/challenge/categories/list");
+    return jsonResponse({
+      info: [
+        { id: 1, name: "Web", icon: "https://cdn.example/web.svg" },
+        { id: 2, name: "Crypto", icon: null },
+      ],
+    });
+  });
+
+  const categories = await api.listChallengeCategories();
+  assert.equal(categories.length, 2);
+  assert.equal(categories[0]?.name, "Web");
+  assert.equal(categories[1]?.icon, null);
+});
+
+test("starts and stops a challenge container through /container", async () => {
+  const calls: string[] = [];
+  const api = apiWithFetch((url, init) => {
+    calls.push(`${init.method} ${url.pathname}`);
+    assert.deepEqual(JSON.parse(String(init.body)), { containerable_id: 883 });
+    if (url.pathname === "/api/v4/container/start") {
+      return jsonResponse({ message: "Instance Created!", id: 1214160 });
+    }
+    assert.equal(url.pathname, "/api/v4/container/stop");
+    return jsonResponse({ message: "Instance Stopped!" });
+  });
+
+  const started = await api.startChallengeContainer(883);
+  assert.equal(started.message, "Instance Created!");
+  await api.stopChallengeContainer(883);
+  assert.deepEqual(calls, [
+    "POST /api/v4/container/start",
+    "POST /api/v4/container/stop",
+  ]);
+});
+
+test("fetches a challenge download link", async () => {
+  const api = apiWithFetch((url) => {
+    assert.equal(url.pathname, "/api/v4/challenges/883/download_link");
+    return jsonResponse({
+      url: "https://cdn.example/challenges/883.zip?signature=abc",
+      expires_in: 300,
+    });
+  });
+
+  const link = await api.getChallengeDownloadLink(883);
+  assert.match(link.url, /883\.zip/);
+  assert.equal(link.expiresIn, 300);
+});
+
+test("lists Sherlocks with state, difficulty, and category filters", async () => {
+  const api = apiWithFetch((url) => {
+    assert.equal(url.pathname, "/api/v4/sherlocks");
+    assert.deepEqual(url.searchParams.getAll("state"), ["active", "retired"]);
+    assert.deepEqual(url.searchParams.getAll("difficulty[]"), ["hard"]);
+    assert.equal(url.searchParams.get("category[]"), "16");
+    assert.equal(url.searchParams.get("per_page"), "50");
+    return jsonResponse({
+      data: [
+        {
+          id: 565,
+          name: "Safecracker",
+          category_name: "Malware Analysis",
+          difficulty: "Hard",
+          state: "active",
+          is_owned: false,
+          progress: 25,
+          solves: 120,
+          rating: 4.5,
+          release_date: "2026-01-01T00:00:00.000000Z",
+        },
+      ],
+      meta: { current_page: 1, total: 1 },
+    });
+  });
+
+  const result = await api.listSherlocks({
+    state: "all",
+    difficulty: "hard",
+    category: 16,
+    perPage: 50,
+  });
+
+  assert.equal(result.sherlocks[0]?.name, "Safecracker");
+  assert.equal(result.sherlocks[0]?.category, "Malware Analysis");
+  assert.equal(result.sherlocks[0]?.progress, 25);
+  assert.equal(result.meta.total, 1);
+});
+
+test("merges Sherlock info, play, and progress", async () => {
+  const api = apiWithFetch((url) => {
+    if (url.pathname === "/api/v4/sherlocks/Safecracker") {
+      return jsonResponse({
+        data: {
+          id: 565,
+          name: "Safecracker",
+          category_name: "Malware Analysis",
+          difficulty: "Insane",
+          state: "active",
+          is_owned: false,
+          file_password: "sherlock",
+        },
+      });
+    }
+    if (url.pathname === "/api/v4/sherlocks/565/info") {
+      return jsonResponse({
+        data: {
+          id: 565,
+          description: "Analyse the evidence.",
+          user_owns_count: 42,
+          academyModules: [{ id: 7, name: "DFIR Fundamentals" }],
+        },
+      });
+    }
+    if (url.pathname === "/api/v4/sherlocks/565/play") {
+      return jsonResponse({
+        data: {
+          scenario: "A workstation was compromised.",
+          creators: [{ name: "maker" }],
+          file_name: "evidence.zip",
+          file_size: "12 MB",
+          play_info: { status: "ready", ip: null, ports: [], expires_at: null },
+          blood: { blood_user: "first" },
+        },
+      });
+    }
+    if (url.pathname === "/api/v4/sherlocks/565/progress") {
+      return jsonResponse({
+        data: {
+          is_owned: true,
+          own_rank: 2,
+          progress: 50,
+          tasks_answered: 3,
+          total_tasks: 6,
+        },
+      });
+    }
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+
+  const sherlock = await api.getSherlock("Safecracker");
+  assert.equal(sherlock.id, 565);
+  assert.equal(sherlock.description, "Analyse the evidence.");
+  assert.equal(sherlock.scenario, "A workstation was compromised.");
+  assert.equal(sherlock.fileName, "evidence.zip");
+  assert.deepEqual(sherlock.creators, ["maker"]);
+  assert.equal(sherlock.isOwned, true);
+  assert.equal(sherlock.tasksAnswered, 3);
+  assert.equal(sherlock.totalTasks, 6);
+});
+
+test("submits a Sherlock task answer", async () => {
+  const api = apiWithFetch((url, init) => {
+    assert.equal(url.pathname, "/api/v4/sherlocks/565/tasks/2880/flag");
+    assert.equal(init.method, "POST");
+    assert.deepEqual(JSON.parse(String(init.body)), { flag: "10.0.0.5" });
+    return jsonResponse({ message: "Task flag owned!" }, 201);
+  });
+
+  const result = await api.submitSherlockTask(565, 2880, "10.0.0.5");
+  assert.equal(result.message, "Task flag owned!");
+});
+
 test("submits a machine flag through v5", async () => {
   const api = apiWithFetch((url, init) => {
     assert.equal(url.pathname, "/api/v5/machine/own");

@@ -39,6 +39,84 @@ export class HtbClient {
     return this.request<T>(path, { ...options, method: "POST" });
   }
 
+  /**
+   * Fetch a signed download URL without any HTB credentials. Storage backends
+   * such as S3 reject requests that carry both a presigned signature and a
+   * bearer token.
+   */
+  async fetchExternal(rawUrl: string): Promise<Response> {
+    const url = this.validateDownloadUrl(rawUrl);
+    let response: Response;
+
+    try {
+      response = await this.fetchImpl(url, {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}`,
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(this.config.downloadTimeoutMs),
+      });
+    } catch (error) {
+      const timedOut =
+        error instanceof Error &&
+        (error.name === "TimeoutError" || error.name === "AbortError");
+      throw new HtbError({
+        code: "NETWORK_ERROR",
+        message: timedOut
+          ? `Download timed out after ${this.config.downloadTimeoutMs}ms.`
+          : `Could not reach the download host: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+        endpoint: `${url.origin}${url.pathname}`,
+        hint: "Download links expire quickly. Request a fresh link and retry.",
+      });
+    }
+
+    if (!response.ok) {
+      throw new HtbError({
+        code: response.status === 403 || response.status === 404 ? "NOT_FOUND" : "API_ERROR",
+        message: `Download failed (${response.status} ${response.statusText}).`,
+        status: response.status,
+        endpoint: `${url.origin}${url.pathname}`,
+        hint: "Download links expire quickly. Request a fresh link and retry.",
+      });
+    }
+
+    return response;
+  }
+
+  private validateDownloadUrl(rawUrl: string): URL {
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      throw new HtbError({
+        code: "INVALID_RESPONSE",
+        message: "HTB returned an invalid download URL.",
+      });
+    }
+
+    if (url.username || url.password) {
+      throw new HtbError({
+        code: "INVALID_RESPONSE",
+        message: "Refusing a download URL that contains credentials.",
+      });
+    }
+
+    const httpAllowed = this.config.labsUrl.startsWith("http://");
+    if (url.protocol !== "https:" && !(httpAllowed && url.protocol === "http:")) {
+      throw new HtbError({
+        code: "INVALID_RESPONSE",
+        message: `Refusing to download over ${url.protocol}.`,
+        hint: "HTB download links must use HTTPS.",
+      });
+    }
+
+    return url;
+  }
+
   async request<T>(path: string, options: HtbRequestOptions = {}): Promise<T> {
     if (!this.config.token && !this.config.sessionCookie) {
       throw new HtbError({

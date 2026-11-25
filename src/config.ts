@@ -8,6 +8,8 @@ export interface AppConfig {
   timeoutMs: number;
   maxRetries: number;
   vpnDir: string;
+  downloadDir: string;
+  downloadTimeoutMs: number;
   openvpnBin: string;
   openvpnUseSudo: boolean;
 }
@@ -19,6 +21,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const vpnDir = resolve(
     expandHome(env.HTB_VPN_DIR ?? `${homedir()}/.config/htb-mcp/vpn`),
   );
+  const downloadDir = resolve(
+    expandHome(env.HTB_DOWNLOAD_DIR ?? `${homedir()}/.config/htb-mcp/downloads`),
+  );
+  const downloadTimeoutMs = parseInteger(
+    env.HTB_DOWNLOAD_TIMEOUT_MS,
+    300_000,
+    10_000,
+    3_600_000,
+  );
 
   return {
     token: nonEmpty(env.HTB_TOKEN ?? env.HTB_APP_TOKEN),
@@ -27,6 +38,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     timeoutMs,
     maxRetries,
     vpnDir,
+    downloadDir,
+    downloadTimeoutMs,
     openvpnBin: nonEmpty(env.HTB_OPENVPN_BIN) ?? "openvpn",
     openvpnUseSudo: !["0", "false", "no"].includes(
       (env.HTB_OPENVPN_USE_SUDO ?? "1").toLowerCase(),
